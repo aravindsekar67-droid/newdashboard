@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "framework": null,
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{mqtt_test.py,yolov8n.pt}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
+  ]
+}

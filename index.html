@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SMART-BELT AI — Industrial Conveyor Monitoring Dashboard</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <!-- Font Awesome Icons -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    >
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Three.js & OrbitControls for 3D Digital Twin -->
+    <script src="libs/three.min.js"></script>
+    <script src="libs/OrbitControls.js"></script>
+    <script src="digital_twin_3d.js"></script>
+</head>
+
+<body class="industrial-theme">
+
+    <!-- =========================================================
+         HEADER & CONTROLS
+         ========================================================= -->
+
+    <header class="app-header">
+
+        <div class="header-left">
+
+            <div class="logo-box">
+
+                <i class="fa-solid fa-microchip logo-icon"></i>
+
+                <div class="logo-text">
+
+                    <h1>
+                        SMART-BELT
+                        <span class="ai-badge">AI CORE</span>
+                    </h1>
+
+                    <span class="sub-text">
+                        Predictive Conveyor Splice Analytics
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="system-status-pill">
+
+                <span
+                    class="status-dot online"
+                    id="status-indicator">
+                </span>
+
+                <span id="system-mode-text">
+                    SYSTEM ONLINE
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="header-center conveyor-controls">
+
+            <button
+                class="btn btn-start"
+                id="btn-start"
+                onclick="controlConveyor('START')">
+
+                <i class="fa-solid fa-play"></i>
+                START BELT
+
+            </button>
+
+
+            <button
+                class="btn btn-stop"
+                id="btn-stop"
+                onclick="controlConveyor('PAUSE')">
+
+                <i class="fa-solid fa-pause"></i>
+                PAUSE
+
+            </button>
+
+
+            <button
+                class="btn btn-simulate-fault"
+                id="btn-fault"
+                onclick="handleMainFaultToggle()">
+
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span id="btn-fault-text">INJECT FAULT</span>
+
+            </button>
+
+
+            <button
+                class="btn btn-emergency"
+                id="btn-emergency"
+                onclick="controlConveyor('STOP')">
+
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                E-STOP TRIP
+
+            </button>
+
+        </div>
+
+
+        <div class="header-right">
+
+            <div class="toggle-mode-box">
+
+                <span>
+                    MONITORING ACTIVE
+                </span>
+
+
+                <label class="switch">
+
+                    <input
+                        type="checkbox"
+                        id="demo-mode-toggle"
+                        checked
+                        onchange="toggleDemoMode(this.checked)"
+                    >
+
+                    <span class="slider"></span>
+
+                </label>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================================================
+         CRITICAL ALARM BANNER
+         ========================================================= -->
+
+    <div
+        class="alarm-banner hidden"
+        id="critical-alarm-banner">
+
+        <div style="display:flex;align-items:center;">
+
+            <div class="alarm-icon-box">
+
+                <i class="fa-solid fa-triangle-exclamation"></i>
+
+            </div>
+
+
+            <div class="alarm-content">
+
+                <h3 id="alarm-title">
+
+                    <i class="fa-solid fa-circle-exclamation"></i>
+
+                    CRITICAL INTERLOCK TRIP
+
+                </h3>
+
+
+                <p id="alarm-message">
+
+                    High Vibration & Splice Separation detected!
+                    Conveyor drive interlock open.
+
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="alarm-actions">
+
+            <button
+                class="btn btn-ack"
+                onclick="acknowledgeAlert()">
+
+                ACKNOWLEDGE
+
+            </button>
+
+
+            <button
+                class="btn btn-emergency-small"
+                onclick="controlConveyor('START')">
+
+                RESET & START
+
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================================
+         DASHBOARD
+         ========================================================= -->
+
+    <main class="dashboard-container">
+
+        <!-- =====================================================
+             INDUSTRIAL SAFETY LIGHT & DIAGNOSTIC FAULT CONSOLE
+             ===================================================== -->
+        <section class="safety-console-section" id="safety-light-console">
+            <div class="safety-console-card">
+                <!-- Left: Industrial Andon Tower & Status Beacon -->
+                <div class="safety-tower-wrapper">
+                    <div class="andon-tower" id="andon-tower">
+                        <div class="andon-cap top"></div>
+                        <div class="andon-lamp red" id="andon-lamp-red" title="Critical Safety Interlock / Joint Rupture">
+                            <span class="lamp-core"></span>
+                            <span class="lamp-label">RED</span>
+                        </div>
+                        <div class="andon-lamp amber" id="andon-lamp-amber" title="Predictive Early Warning / Micro-Fault">
+                            <span class="lamp-core"></span>
+                            <span class="lamp-label">AMBER</span>
+                        </div>
+                        <div class="andon-lamp green active" id="andon-lamp-green" title="Nominal Operation / Safe Conveyor">
+                            <span class="lamp-core"></span>
+                            <span class="lamp-label">GREEN</span>
+                        </div>
+                        <div class="andon-cap base"></div>
+                        <div class="andon-pole"></div>
+                    </div>
+                    
+                    <div class="safety-status-info">
+                        <div class="safety-badge-row">
+                            <span class="safety-indicator-badge safe" id="safety-main-badge">
+                                <i class="fa-solid fa-shield-halved"></i> SAFETY LIGHT: NORMAL (GREEN)
+                            </span>
+                            <span class="safety-interlock-badge closed" id="safety-interlock-badge">
+                                <i class="fa-solid fa-lock"></i> INTERLOCK: ENERGIZED
+                            </span>
+                        </div>
+                        <h2 class="safety-headline" id="safety-headline">
+                            <span id="safety-headline-text">Conveyor Structural Splice Integrity Nominal</span>
+                        </h2>
+                        <p class="safety-subtext" id="safety-subtext">All 10 vulcanized splices verified safe. Optical scan laser & acoustic telemetry nominal.</p>
+                        <div class="safety-prescriptive-box" id="safety-prescriptive-box">
+                            <i class="fa-solid fa-screwdriver-wrench"></i> <span id="safety-prescriptive-text">Routine scheduled inspection. No intervention required.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Error Simulation Selector & Triggers -->
+                <div class="simulation-controls-box">
+                    <div class="sim-header">
+                        <span class="sim-title"><i class="fa-solid fa-bolt-lightning"></i> FAULT INJECTION CONSOLE</span>
+                        <span class="sim-pill">SAFETY LIGHT SYNC</span>
+                    </div>
+                    
+                    <div class="sim-quick-buttons">
+                        <!-- Joint Rupture Error Button -->
+                        <button class="sim-btn sim-btn-rupture" onclick="simulateSpecificFault('TRANSVERSE_TEAR')" id="btn-sim-transverse">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Joint Rupture Event</span>
+                            <span class="sim-level crit">CRITICAL (RED LIGHT)</span>
+                        </button>
+                        
+                        <!-- Severe Carcass Rupture -->
+                        <button class="sim-btn sim-btn-rupture-cat" onclick="simulateSpecificFault('SEVERE_RUPTURE')" id="btn-sim-severe">
+                            <i class="fa-solid fa-radiation"></i>
+                            <span>Severe Carcass Rupture</span>
+                            <span class="sim-level crit">TRIP (RED LIGHT)</span>
+                        </button>
+                        
+                        <!-- Longitudinal Rip -->
+                        <button class="sim-btn sim-btn-rip" onclick="simulateSpecificFault('LONGITUDINAL_RUPTURE')" id="btn-sim-longitudinal">
+                            <i class="fa-solid fa-scissors"></i>
+                            <span>Longitudinal Belt Rip</span>
+                            <span class="sim-level crit">RIP-STOP (RED LIGHT)</span>
+                        </button>
+                        
+                        <!-- Micro-Cracks Error -->
+                        <button class="sim-btn sim-btn-cracks" onclick="simulateSpecificFault('SMALL_CRACKS')" id="btn-sim-cracks">
+                            <i class="fa-solid fa-burst"></i>
+                            <span>Surface Micro-Cracks</span>
+                            <span class="sim-level warn">EARLY (AMBER LIGHT)</span>
+                        </button>
+                        
+                        <!-- Cord Fraying Error -->
+                        <button class="sim-btn sim-btn-fray" onclick="simulateSpecificFault('FRAYING')" id="btn-sim-fray">
+                            <i class="fa-solid fa-lines-leaning"></i>
+                            <span>Cord Fiber Fraying</span>
+                            <span class="sim-level warn">EARLY (AMBER LIGHT)</span>
+                        </button>
+                        
+                        <!-- Belt Misalignment -->
+                        <button class="sim-btn sim-btn-align" onclick="simulateSpecificFault('BELT_MISALIGNMENT')" id="btn-sim-align">
+                            <i class="fa-solid fa-arrows-left-right"></i>
+                            <span>Belt Misalignment</span>
+                            <span class="sim-level warn">TRACKING (AMBER LIGHT)</span>
+                        </button>
+                        
+                        <!-- Clear / Normal Reset -->
+                        <button class="sim-btn sim-btn-reset active" onclick="simulateSpecificFault('NORMAL_BELT')" id="btn-sim-normal">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>Clear Fault / Safe Belt</span>
+                            <span class="sim-level safe">CLEAR (GREEN LIGHT)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================
+             KPI CARDS
+             ===================================================== -->
+        <section class="kpi-grid">
+
+
+            <!-- Active NFC Joint -->
+
+            <div class="kpi-card highlight-cyan">
+
+                <div class="kpi-header">
+
+                    <span>
+
+                        <i class="fa-solid fa-tag"></i>
+
+                        ACTIVE NFC JOINT
+
+                    </span>
+
+
+                    <span
+                        class="badge badge-normal"
+                        id="badge-conveyor-status">
+
+                        RUNNING
+
+                    </span>
+
+                </div>
+
+
+                <div class="kpi-body">
+
+                    <div
+                        class="big-value joint-id-text"
+                        id="kpi-joint-id">
+
+                        J001
+
+                    </div>
+
+
+                    <div class="sub-value">
+
+                        Tag:
+
+                        <span
+                            class="tag-id"
+                            id="kpi-rfid-tag">
+
+                            NFC-E200000
+
+                        </span>
+
+                    </div>
+
+
+                    <div class="mini-sensor-id">
+
+                        Last Pass:
+
+                        <span id="kpi-last-time">
+                            Just now
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- AI Health -->
+
+            <div class="kpi-card">
+
+                <div class="kpi-header">
+
+                    <span>
+
+                        <i class="fa-solid fa-heart-pulse"></i>
+
+                        AI HEALTH SCORE
+
+                    </span>
+
+
+                    <span
+                        class="badge badge-normal"
+                        id="badge-risk-level">
+
+                        NORMAL RISK
+
+                    </span>
+
+                </div>
+
+
+                <div class="kpi-body health-gauge-box">
+
+                    <div class="gauge-container">
+
+                        <svg
+                            class="gauge-svg"
+                            viewBox="0 0 120 60">
+
+                            <path
+                                d="M 10 50 A 40 40 0 0 1 110 50"
+                                fill="none"
+                                stroke="#334155"
+                                stroke-width="8"
+                                stroke-linecap="round"
+                            />
+
+                            <path
+                                id="gauge-fill-path"
+                                d="M 10 50 A 40 40 0 0 1 110 50"
+                                fill="none"
+                                stroke="#10b981"
+                                stroke-width="8"
+                                stroke-dasharray="126"
+                                stroke-dashoffset="10"
+                                stroke-linecap="round"
+                            />
+
+                        </svg>
+
+
+                        <div class="gauge-text">
+
+                            <span
+                                class="gauge-number"
+                                id="kpi-health-score">
+
+                                94.2
+
+                            </span>
+
+                            <span class="gauge-unit">
+                                %
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <span
+                        class="health-band-indicator text-green"
+                        id="health-band-name">
+
+                        NORMAL (80-100%)
+
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- Vibration -->
+
+            <div class="kpi-card">
+
+                <div class="kpi-header">
+
+                    <span>
+
+                        <i class="fa-solid fa-wave-square"></i>
+
+                        VIBRATION (MPU6050)
+
+                    </span>
+
+
+                    <span class="mini-sensor-id">
+                        ACCELEROMETER
+                    </span>
+
+                </div>
+
+
+                <div class="kpi-body">
+
+                    <div
+                        class="big-value"
+                        id="kpi-vib">
+
+                        0.38
+
+                        <span class="unit">
+                            g
+                        </span>
+
+                    </div>
+
+
+                    <div class="progress-bar-container">
+
+                        <div
+                            class="progress-bar-fill vib-bar"
+                            id="vib-progress"
+                            style="width:25%;">
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="sub-value">
+
+                        Operating Baseline:
+                        &lt; 1.50 g
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Temperature -->
+
+            <div class="kpi-card">
+
+                <div class="kpi-header">
+
+                    <span>
+
+                        <i class="fa-solid fa-temperature-half"></i>
+
+                        TEMPERATURE (DS18B20)
+
+                    </span>
+
+
+                    <span class="mini-sensor-id">
+                        THERMAL
+                    </span>
+
+                </div>
+
+
+                <div class="kpi-body">
+
+                    <div
+                        class="big-value"
+                        id="kpi-temp">
+
+                        37.5
+
+                        <span class="unit">
+                            °C
+                        </span>
+
+                    </div>
+
+
+                    <div class="progress-bar-container">
+
+                        <div
+                            class="progress-bar-fill temp-bar"
+                            id="temp-progress"
+                            style="width:42%;">
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="sub-value">
+
+                        Safe Threshold:
+                        &lt; 65.0 °C
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Acoustic & Speed -->
+
+            <div class="kpi-card">
+
+                <div class="kpi-header">
+
+                    <span>
+
+                        <i class="fa-solid fa-gauge-high"></i>
+
+                        ACOUSTIC & SPEED
+
+                    </span>
+
+
+                    <span class="mini-sensor-id">
+                        HALL / MIC
+                    </span>
+
+                </div>
+
+
+                <div class="kpi-body">
+
+                    <div
+                        class="big-value"
+                        id="kpi-sound">
+
+                        62.4
+
+                        <span class="unit">
+                            dB
+                        </span>
+
+                    </div>
+
+
+                    <div class="progress-bar-container">
+
+                        <div
+                            class="progress-bar-fill sound-bar"
+                            id="sound-progress"
+                            style="width:55%;">
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="sub-value">
+
+                        Conveyor Speed:
+
+                        <strong
+                            id="kpi-speed"
+                            style="color:var(--accent-cyan);">
+
+                            1.85
+
+                        </strong>
+
+                        m/s
+
+                        (
+
+                        <span id="kpi-status-text">
+                            RUNNING
+                        </span>
+
+                        )
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             LIVE CONVEYOR TRACKING
+             ===================================================== -->
+
+        <section class="conveyor-viz-section">
+
+            <div class="viz-header">
+
+                <h3>
+
+                    <i class="fa-solid fa-arrows-spin"></i>
+
+                    Live Conveyor Splice Tracking
+
+                </h3>
+
+                <div class="view-mode-toggle">
+                    <button class="view-mode-btn active" id="btn-view-3d" onclick="switchConveyorView('3D')"><i class="fa-solid fa-cube"></i> 3D Digital Twin</button>
+                    <button class="view-mode-btn" id="btn-view-2d" onclick="switchConveyorView('2D')"><i class="fa-solid fa-bars-staggered"></i> 2D Track</button>
+                </div>
+
+                <div class="viz-stats-pills">
+
+                    <span class="stat-pill">
+
+                        Total Passes:
+
+                        <strong id="kpi-total-inspections">
+                            148
+                        </strong>
+
+                    </span>
+
+
+                    <span class="stat-pill warning">
+
+                        Warnings:
+
+                        <strong id="kpi-warning-count">
+                            3
+                        </strong>
+
+                    </span>
+
+
+                    <span class="stat-pill danger">
+
+                        Criticals:
+
+                        <strong id="kpi-critical-count">
+                            1
+                        </strong>
+
+                    </span>
+
+                </div>
+
+            </div>
+
+            <!-- 3D DIGITAL TWIN VIEWPORT -->
+            <div id="digital-twin-container" class="digital-twin-wrapper"></div>
+
+            <!-- 2D SCHEMATIC TRACK (Preserved for compatibility) -->
+            <div class="conveyor-graphic-box" id="conveyor-2d-box" style="display: none;">
+
+                <div class="belt-track">
+
+                    <div class="roller roller-left"></div>
+
+                    <div class="roller roller-right"></div>
+
+
+                    <div
+                        class="belt-surface"
+                        id="belt-surface">
+
+                        <!-- Joint markers are created by app.js -->
+
+                    </div>
+
+                </div>
+
+
+                <div class="sensor-station-arch">
+
+                    <div
+                        class="sensor-head"
+                        id="scan-station-head">
+
+                        <i class="fa-solid fa-camera"></i>
+
+                        SCAN STATION
+
+                    </div>
+
+                </div>
+
+
+                <div class="scan-beam" id="scan-beam"></div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             WEBCAM + REAL-TIME SENSOR CURVES
+             ===================================================== -->
+
+        <section class="analysis-grid">
+
+
+            <!-- LAPTOP WEBCAM -->
+
+            <div class="panel-box">
+                <div class="panel-header">
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <h3>
+                            <i class="fa-solid fa-camera"></i>
+                            Optical Splice Visual Inspection
+                        </h3>
+                        <div class="cam-source-tabs">
+                            <button class="cam-tab-btn active" id="tab-src-backend" onclick="switchCameraSource('BACKEND')" title="Live Stream with YOLOv8 Neural Network Inference">
+                                <i class="fa-solid fa-microchip"></i> AI Vision Stream
+                            </button>
+                            <button class="cam-tab-btn" id="tab-src-browser" onclick="switchCameraSource('BROWSER')" title="Direct Laptop / USB Webcam">
+                                <i class="fa-solid fa-video"></i> Local Webcam
+                            </button>
+                            <button class="cam-tab-btn" id="tab-src-sim" onclick="switchCameraSource('SIM')" title="Conveyor Optical Scanner Feed">
+                                <i class="fa-solid fa-desktop"></i> Conveyor Scanner
+                            </button>
+                        </div>
+                    </div>
+
+                    <span class="badge badge-normal" id="camera-result-badge">NORMAL</span>
+                </div>
+
+                <div class="camera-body">
+                    <div class="cam-feed-container" style="position:relative; overflow:hidden; width:100%; border-radius:6px; min-height:220px; background:#090d16;">
+                        <!-- 1. LIVE BACKEND STREAM (YOLOv8 Annotated) -->
+                        <img id="backend-cam-stream" src="/api/video_feed" style="display:block; width:100%; height:100%; min-height:220px; object-fit:cover;" alt="Live AI Vision Feed">
+
+                        <!-- 2. DIRECT BROWSER WEBCAM -->
+                        <video id="webcam-video" autoplay playsinline muted style="display:none; width:100%; height:100%; min-height:220px; object-fit:cover;"></video>
+
+                        <!-- 3. PROCEDURAL CONVEYOR CANVAS FALLBACK -->
+                        <canvas id="sim-conveyor-canvas" width="640" height="360" style="display:none; width:100%; height:100%; min-height:220px; object-fit:cover;"></canvas>
+
+                        <!-- Live Camera Status Overlay Pill -->
+                        <div class="cam-stream-badge" id="cam-stream-badge">
+                            <span class="cam-dot live"></span>
+                            <span id="cam-stream-source-name">AI SERVER STREAM (YOLOv8 ACTIVE)</span>
+                        </div>
+
+                        <!-- Camera Permission / Error Helper Overlay -->
+                        <div class="cam-permission-overlay hidden" id="cam-permission-overlay">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <div class="cam-perm-text">
+                                <strong>Webcam Access Blocked / In Use</strong>
+                                <span id="cam-perm-error-msg">Camera hardware could not be initialized or permission was dismissed.</span>
+                            </div>
+                            <button class="btn btn-reconnect-cam" onclick="retryBrowserWebcam()">
+                                <i class="fa-solid fa-rotate-right"></i> Request Camera Permission
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="camera-info-row">
+
+                        <div>
+
+                            Inspecting:
+
+                            <strong id="cam-joint-id-text">
+                                J001
+                            </strong>
+
+                            (
+
+                            <span id="cam-overlay-rfid">
+                                NFC-E200000
+                            </span>
+
+                            )
+
+                        </div>
+
+
+                        <div id="cam-ai-status">
+
+                            <span class="text-green">
+
+                                <i class="fa-solid fa-circle-check"></i>
+
+                                NO DAMAGE DETECTED
+
+                            </span>
+
+                        </div>
+
+
+                        <div id="cam-overlay-time">
+
+                            STREAM: WAITING
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- REAL-TIME SENSOR TELEMETRY -->
+
+            <div class="panel-box">
+
+                <div class="panel-header">
+
+                    <h3>
+
+                        <i class="fa-solid fa-chart-line"></i>
+
+                        Real-Time Multi-Sensor Telemetry Trends
+
+                    </h3>
+
+
+                    <span class="mini-sensor-id">
+
+                        AUTO-REFRESH (1.2s)
+
+                    </span>
+
+                </div>
+
+
+                <div
+                    style="
+                        position:relative;
+                        height:230px;
+                        width:100%;
+                    ">
+
+                    <canvas
+                        id="live-sensors-chart">
+                    </canvas>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             PREDICTIVE MONITORING
+             ===================================================== -->
+
+        <section class="predictive-section">
+
+            <div class="panel-box width-100">
+
+                <div class="panel-header header-with-select">
+
+                    <h3>
+
+                        <i class="fa-solid fa-brain"></i>
+
+                        Predictive Health Diagnostics &
+                        Splice Fatigue Trend
+
+                    </h3>
+
+
+                    <div class="joint-select-box">
+
+                        <label for="joint-select">
+
+                            <i class="fa-solid fa-filter"></i>
+
+                            Select Joint:
+
+                        </label>
+
+
+                        <select
+                            id="joint-select"
+                            onchange="loadJointPredictiveTrend(this.value)">
+
+                            <option value="J001">
+                                Joint #1 (J001)
+                            </option>
+
+                            <option value="J002">
+                                Joint #2 (J002)
+                            </option>
+
+                            <option value="J003">
+                                Joint #3 (J003)
+                            </option>
+
+                            <option value="J004">
+                                Joint #4 (J004)
+                            </option>
+
+                            <option value="J005">
+                                Joint #5 (J005)
+                            </option>
+
+                            <option value="J006">
+                                Joint #6 (J006)
+                            </option>
+
+                            <option value="J007">
+                                Joint #7 (J007)
+                            </option>
+
+                            <option value="J008">
+                                Joint #8 (J008)
+                            </option>
+
+                            <option value="J009">
+                                Joint #9 (J009)
+                            </option>
+
+                            <option value="J010">
+                                Joint #10 (J010)
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+
+                <div class="predictive-body">
+
+
+                    <!-- Historical Degradation Curve -->
+
+                    <div
+                        style="
+                            position:relative;
+                            height:220px;
+                            width:100%;
+                        ">
+
+                        <canvas
+                            id="predictive-trend-chart">
+                        </canvas>
+
+                    </div>
+
+
+                    <!-- AI INSIGHTS -->
+
+                    <div class="predictive-insights-card">
+
+                        <h4>
+                            PREDICTIVE DIAGNOSTICS
+                        </h4>
+
+
+                        <div class="insight-metric">
+
+                            <span class="label">
+                                Target Joint:
+                            </span>
+
+                            <strong id="pred-joint-name">
+                                J001
+                            </strong>
+
+                        </div>
+
+
+                        <div class="insight-metric">
+
+                            <span class="label">
+                                Current Splice Health:
+                            </span>
+
+                            <strong
+                                id="pred-current-health"
+                                class="text-green">
+
+                                94.2%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="insight-metric">
+
+                            <span class="label">
+                                Estimated Remaining Life:
+                            </span>
+
+                            <strong
+                                id="pred-est-days"
+                                class="text-green">
+
+                                128 Days
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="insight-recommendation"
+                            id="pred-recommendation">
+
+                            <i class="fa-solid fa-circle-check text-green"></i>
+
+                            Joint in optimal operating condition.
+                            Scheduled routine inspection in 30 days.
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             INSPECTION HISTORY
+             ===================================================== -->
+
+        <section class="panel-box history-table-section">
+
+            <div class="panel-header">
+
+                <h3>
+
+                    <i class="fa-solid fa-table-list"></i>
+
+                    Joint Inspection Log & Historical Audit
+
+                </h3>
+
+
+                <div class="table-filter-bar">
+
+
+                    <div class="filter-item">
+
+                        <label>
+                            Joint:
+                        </label>
+
+
+                        <select
+                            id="history-joint-filter"
+                            onchange="applyHistoryFilters()">
+
+                            <option value="ALL">
+                                All Joints
+                            </option>
+
+                            <option value="J001">J001</option>
+                            <option value="J002">J002</option>
+                            <option value="J003">J003</option>
+                            <option value="J004">J004</option>
+                            <option value="J005">J005</option>
+                            <option value="J006">J006</option>
+                            <option value="J007">J007</option>
+                            <option value="J008">J008</option>
+                            <option value="J009">J009</option>
+                            <option value="J010">J010</option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="filter-item">
+
+                        <label>
+                            Risk Level:
+                        </label>
+
+
+                        <select
+                            id="history-risk-filter"
+                            onchange="applyHistoryFilters()">
+
+                            <option value="ALL">
+                                All Levels
+                            </option>
+
+                            <option value="NORMAL">
+                                Normal
+                            </option>
+
+                            <option value="WARNING">
+                                Warning
+                            </option>
+
+                            <option value="CRITICAL">
+                                Critical
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <button
+                        class="btn btn-secondary"
+                        onclick="exportHistoryCSV()">
+
+                        <i class="fa-solid fa-file-arrow-down"></i>
+
+                        Export CSV
+
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="table-responsive">
+
+                <table class="history-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Timestamp
+                            </th>
+
+                            <th>
+                                Joint ID
+                            </th>
+
+                            <th>
+                                NFC Tag
+                            </th>
+
+                            <th>
+                                Temp (°C)
+                            </th>
+
+                            <th>
+                                Vibration (g)
+                            </th>
+
+                            <th>
+                                Sound (dB)
+                            </th>
+
+                            <th>
+                                Belt Velocity
+                            </th>
+
+                            <th>
+                                Camera Analysis
+                            </th>
+
+                            <th>
+                                Health Score
+                            </th>
+
+                            <th>
+                                Risk Assessment
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="history-table-body">
+
+                        <!-- Populated dynamically via app.js -->
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             30-DAY AI PERIODIC TREND REPORT
+             ===================================================== -->
+
+        <div
+            id="trendReportModal"
+            class="report-modal hidden">
+
+            <div class="report-modal-content">
+
+
+                <div class="report-modal-header">
+
+                    <div
+                        style="
+                            display:flex;
+                            align-items:center;
+                            gap:8px;
+                        ">
+
+                        <i
+                            class="fa-solid fa-microchip"
+                            style="color:var(--accent-cyan);">
+                        </i>
+
+
+                        <h3 id="reportModalTitle">
+
+                            30-Day Periodic AI Splice Report
+
+                        </h3>
+
+                    </div>
+
+
+                    <button
+                        class="close-report-btn"
+                        onclick="closeTrendReport()">
+
+                        &times;
+
+                    </button>
+
+                </div>
+
+
+                <div class="report-modal-body">
+
+                    <div
+                        class="report-alert-badge"
+                        id="reportSummaryBadge">
+
+                        NORMAL FATIGUE RATE
+
+                    </div>
+
+
+                    <p
+                        id="reportSummaryText"
+                        style="
+                            margin-top:10px;
+                            font-size:13px;
+                            color:#cbd5e1;
+                            line-height:1.6;
+                        ">
+                    </p>
+
+
+                    <div class="report-cycle-stats">
+
+
+                        <div class="stat-box">
+
+                            <span class="stat-label">
+                                30-Day Wear Rate:
+                            </span>
+
+                            <span
+                                class="stat-val"
+                                id="reportWearRate">
+
+                                -2.8% / cycle
+
+                            </span>
+
+                        </div>
+
+
+                        <div class="stat-box">
+
+                            <span class="stat-label">
+                                Projected Runway:
+                            </span>
+
+                            <span
+                                class="stat-val"
+                                id="reportEstDays">
+
+                                120 Days
+
+                            </span>
+
+                        </div>
+
+
+                        <div class="stat-box">
+
+                            <span class="stat-label">
+                                Next Inspection:
+                            </span>
+
+                            <span
+                                class="stat-val"
+                                id="reportNextDate">
+
+                                In 30 Days
+
+                            </span>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <div class="report-modal-footer">
+
+                    <button
+                        class="btn btn-secondary"
+                        onclick="closeTrendReport()">
+
+                        Acknowledge
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+
+    <!-- =========================================================
+         APPLICATION JAVASCRIPT
+         ========================================================= -->
+
+    <script src="app.js?v=5"></script>
+
+</body>
+</html>
